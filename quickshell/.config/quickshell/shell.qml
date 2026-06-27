@@ -98,16 +98,58 @@ Scope {
         return haystack.indexOf(needle) !== -1;
     }
 
+    function isEssentialApp(app): bool {
+        const id = (app.id || "").toLowerCase();
+        const name = (app.name || "").toLowerCase();
+
+        // Filter out settings, preferences, about dialogs
+        const nonEssential = [
+            "settings", "preferences", "prefs", "config", "configuration",
+            "about", "help", "assistant", "wizard", "setup", "installer"
+        ];
+
+        for (const term of nonEssential) {
+            if (name.includes(term) || id.includes(term)) {
+                return false;
+            }
+        }
+
+        // Filter out specific non-essential apps
+        const excludeIds = [
+            "avahi-discover", "bssh", "bvnc", "qvidcap", "qv4l2",
+            "lstopo", "cmake-gui", "hp-uiscan", "hplip", "cups",
+            "jconsole", "jshell", "uxterm", "xterm"
+        ];
+
+        if (excludeIds.some(excl => id.includes(excl))) {
+            return false;
+        }
+
+        return true;
+    }
+
     function filteredApps(): var {
         return DesktopEntries.applications.values
-            .filter(app => matchesApp(app, launcherQuery))
+            .filter(app => isEssentialApp(app) && matchesApp(app, launcherQuery))
             .sort((a, b) => a.name.localeCompare(b.name))
             .slice(0, 80);
     }
 
     function appIconSource(icon: string): string {
-        const source = Quickshell.iconPath(icon || "", true);
-        return source || Quickshell.iconPath("application-x-executable", true);
+        if (!icon) return "application-x-executable";
+
+        // Try the provided icon first
+        let source = Quickshell.iconPath(icon, true);
+        if (source) return source;
+
+        // Try without extension if it has one
+        if (icon.includes(".")) {
+            source = Quickshell.iconPath(icon.split(".")[0], true);
+            if (source) return source;
+        }
+
+        // Fallback to generic executable icon
+        return "application-x-executable";
     }
 
     function batteryLabel(): string {
@@ -703,13 +745,27 @@ ListView {
                                     font.family: "JetBrains Mono Nerd Font"
                                     clip: true
                                     text: root.launcherQuery
-                                    onTextChanged: root.launcherQuery = text
+                                    onTextChanged: {
+                                        root.launcherQuery = text;
+                                        appList.currentIndex = 0;
+                                    }
                                     onAccepted: {
                                         if (appList.count > 0) {
-                                            appList.itemAtIndex(0).launch();
+                                            const currentItem = appList.itemAtIndex(appList.currentIndex);
+                                            if (currentItem) currentItem.launch();
                                         }
                                     }
                                     Keys.onEscapePressed: root.hideLauncher()
+                                    Keys.onDownPressed: {
+                                        if (appList.count > 0) {
+                                            appList.currentIndex = Math.min(appList.currentIndex + 1, appList.count - 1);
+                                        }
+                                    }
+                                    Keys.onUpPressed: {
+                                        if (appList.count > 0) {
+                                            appList.currentIndex = Math.max(appList.currentIndex - 1, 0);
+                                        }
+                                    }
 
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
@@ -730,6 +786,8 @@ ListView {
                                 spacing: 6
                                 model: root.filteredApps()
                                 currentIndex: 0
+                                highlightFollowsCurrentItem: true
+                                highlightMoveDuration: 150
 
                                 Keys.onEscapePressed: root.hideLauncher()
                                 Keys.onReturnPressed: if (currentItem) currentItem.launch()
