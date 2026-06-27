@@ -360,12 +360,13 @@ Scope {
         }
     }
 
-    GlobalShortcut {
-        appid: "quickshell"
-        name: "launcher"
-        description: "Toggle Quickshell launcher"
-        onPressed: root.toggleLauncher(root.currentScreenName())
-    }
+    // GlobalShortcut for launcher removed - now using Hyprland keybinding with IPC
+    // GlobalShortcut {
+    //     appid: "quickshell"
+    //     name: "launcher"
+    //     description: "Toggle Quickshell launcher"
+    //     onPressed: root.toggleLauncher(root.currentScreenName())
+    // }
 
     GlobalShortcut {
         appid: "quickshell"
