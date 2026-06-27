@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import Quickshell.Services.Notifications
 import Quickshell.Services.UPower
 import Quickshell.Widgets
 import QtQuick
@@ -24,6 +25,8 @@ Scope {
     property int wifiQuality: -1
     property int focusedWorkspaceId: -1
     property int lastActiveWorkspace: -1
+    property bool notificationCenterVisible: false
+    property string notificationCenterScreenName: ""
 
     ListModel {
         id: workspaceModel
@@ -59,6 +62,24 @@ Scope {
 
     function hideLauncher(): void {
         launcherVisible = false;
+    }
+
+    function showNotificationCenter(screenName: string): void {
+        notificationCenterScreenName = screenName || currentScreenName();
+        notificationCenterVisible = true;
+    }
+
+    function hideNotificationCenter(): void {
+        notificationCenterVisible = false;
+    }
+
+    function toggleNotificationCenter(screenName: string): void {
+        const target = screenName || currentScreenName();
+        if (notificationCenterVisible && notificationCenterScreenName === target) {
+            notificationCenterVisible = false;
+        } else {
+            showNotificationCenter(target);
+        }
     }
 
     function matchesApp(app, query: string): bool {
@@ -291,6 +312,10 @@ Scope {
         function lock(): void {
             root.lock();
         }
+
+        function toggleNotificationCenter(): void {
+            root.toggleNotificationCenter(root.currentScreenName());
+        }
     }
 
     GlobalShortcut {
@@ -305,6 +330,38 @@ Scope {
         name: "lock"
         description: "Lock session"
         onPressed: root.lock()
+    }
+
+    NotificationServer {
+        id: notificationServer
+
+        actionsSupported: true
+        bodySupported: true
+        bodyMarkupSupported: true
+        imageSupported: true
+        keepOnReload: true
+
+        onNotification: (notification) => {
+            notification.tracked = true
+            notificationHistory.insert(0, {
+                notificationObj: notification,
+                timestamp: Date.now(),
+                summary: notification.summary,
+                body: notification.body,
+                appName: notification.appName,
+                appIcon: notification.appIcon,
+                urgency: notification.urgency
+            })
+
+            // Limit to 50 notifications
+            while (notificationHistory.count > 50) {
+                notificationHistory.remove(notificationHistory.count - 1)
+            }
+        }
+    }
+
+    ListModel {
+        id: notificationHistory
     }
 
     Variants {
@@ -557,6 +614,44 @@ ListView {
                             tooltip: root.batteryLabel()
                             accentColor: root.batteryPercent() < 0.2 ? "#f38ba8" : root.accent
                         }
+
+                        Rectangle {
+                            width: 36
+                            height: 36
+                            radius: 18
+                            color: notificationHistory.count > 0 ? root.accentSoft : "transparent"
+                            border.color: root.accent
+                            border.width: notificationHistory.count > 0 ? 1 : 0
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "🔔"
+                                font.pixelSize: 16
+                            }
+
+                            Rectangle {
+                                visible: notificationHistory.count > 0
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                width: 18
+                                height: 18
+                                radius: 9
+                                color: root.accent
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: Math.min(notificationHistory.count, 9)
+                                    color: "#0f0a19"
+                                    font.pixelSize: 10
+                                    font.weight: Font.Bold
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: root.toggleNotificationCenter(bar.modelData.name)
+                            }
+                        }
                     }
                 }
 
@@ -706,6 +801,246 @@ ListView {
                             }
                         }
                     }
+                }
+
+                Repeater {
+                    model: notificationServer.trackedNotifications
+
+                    PopupWindow {
+                        id: toast
+                        required property var modelData
+                        required property int index
+
+                            anchor.window: bar
+                            implicitWidth: 380
+                            implicitHeight: Math.max(90, contentColumn.implicitHeight + 24)
+
+                            anchor.rect.x: bar.width - 400
+                            anchor.rect.y: bar.height + 14 + (index * (implicitHeight + 10))
+
+                            color: "transparent"
+                            visible: modelData.state === Notification.Waiting
+
+                            Timer {
+                                interval: 5000
+                                running: toast.visible && !modelData.resident
+                                onTriggered: modelData.dismiss()
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 12
+                                color: root.bgSolid
+                                border.color: modelData.urgency === Notification.Critical ? "#f38ba8" : root.accent
+                                border.width: 1
+
+                                Column {
+                                    id: contentColumn
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 8
+
+                                    Row {
+                                        width: parent.width
+                                        spacing: 10
+
+                                        Image {
+                                            width: 32
+                                            height: 32
+                                            source: modelData.appIcon || "application-x-executable"
+                                            fillMode: Image.PreserveAspectFit
+                                        }
+
+                                        Column {
+                                            width: parent.width - 42
+                                            spacing: 2
+
+                                            Text {
+                                                width: parent.width
+                                                text: modelData.summary
+                                                color: root.text
+                                                font.pixelSize: 14
+                                                font.weight: Font.Bold
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                width: parent.width
+                                                text: modelData.body
+                                                color: root.muted
+                                                font.pixelSize: 12
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 3
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+
+                                    Row {
+                                        visible: modelData.actions.length > 0
+                                        spacing: 6
+
+                                        Repeater {
+                                            model: toast.modelData.actions
+
+                                            Rectangle {
+                                                required property var modelData
+
+                                                width: 80
+                                                height: 28
+                                                radius: 6
+                                                color: root.accentSoft
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: modelData.text
+                                                    color: root.text
+                                                    font.pixelSize: 11
+                                                }
+
+                                                MouseArea {
+                                                    anchors.fill: parent
+                                                    onClicked: {
+                                                        modelData.invoke()
+                                                        toast.modelData.dismiss()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton
+                                    onClicked: {
+                                        root.showNotificationCenter(bar.modelData.name)
+                                        toast.modelData.dismiss()
+                                    }
+                                }
+                            }
+                        }
+                }
+
+                PopupWindow {
+                    id: notificationCenter
+                    anchor.window: bar
+                    implicitWidth: 420
+                    implicitHeight: 600
+
+                    anchor.rect.x: bar.width - 440
+                    anchor.rect.y: bar.height + 14
+
+                    grabFocus: true
+                    color: "transparent"
+                    visible: root.notificationCenterVisible &&
+                             root.notificationCenterScreenName === bar.modelData.name
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 16
+                        color: root.bgSolid
+                        border.color: root.border
+                        border.width: 1
+
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 12
+
+                            Row {
+                                width: parent.width
+                                height: 40
+
+                                Text {
+                                    text: "Notifications"
+                                    color: root.text
+                                    font.pixelSize: 18
+                                    font.weight: Font.Bold
+                                }
+
+                                Item { width: parent.width - 200; height: 1 }
+
+                                Rectangle {
+                                    width: 80
+                                    height: 32
+                                    radius: 8
+                                    color: root.accentSoft
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "Clear All"
+                                        color: root.text
+                                        font.pixelSize: 12
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: notificationHistory.clear()
+                                    }
+                                }
+                            }
+
+                            ListView {
+                                width: parent.width
+                                height: parent.height - 52
+                                clip: true
+                                spacing: 8
+                                model: notificationHistory
+
+                                delegate: Rectangle {
+                                    required property var modelData
+
+                                    width: parent ? parent.width : 0
+                                    height: cardContent.implicitHeight + 24
+                                    radius: 10
+                                    color: root.accentSoft
+                                    border.color: modelData.urgency === 2 ? "#f38ba8" : "#44cba6f7"
+                                    border.width: 1
+
+                                    Column {
+                                        id: cardContent
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        spacing: 8
+
+                                        Row {
+                                            width: parent.width
+                                            spacing: 10
+
+                                            Image {
+                                                width: 32
+                                                height: 32
+                                                source: modelData.appIcon || "application-x-executable"
+                                                fillMode: Image.PreserveAspectFit
+                                            }
+
+                                            Column {
+                                                width: parent.width - 42
+                                                spacing: 2
+
+                                                Text {
+                                                    text: modelData.summary
+                                                    color: root.text
+                                                    font.pixelSize: 14
+                                                    font.weight: Font.Bold
+                                                }
+
+                                                Text {
+                                                    text: modelData.body
+                                                    color: root.muted
+                                                    font.pixelSize: 12
+                                                    wrapMode: Text.WordWrap
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Keys.onEscapePressed: root.hideNotificationCenter()
                 }
             }
         }
