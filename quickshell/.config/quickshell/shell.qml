@@ -806,12 +806,12 @@ ListView {
                 Repeater {
                     model: notificationServer.trackedNotifications
 
-                    PopupWindow {
+                    delegate: PopupWindow {
                         id: toast
                         required property var modelData
                         required property int index
 
-                            anchor.window: bar
+                        anchor.window: bar
                             implicitWidth: 380
                             implicitHeight: Math.max(90, contentColumn.implicitHeight + 24)
 
@@ -942,6 +942,9 @@ ListView {
                         color: root.bgSolid
                         border.color: root.border
                         border.width: 1
+                        focus: true
+
+                        Keys.onEscapePressed: root.hideNotificationCenter()
 
                         Column {
                             anchors.fill: parent
@@ -1039,8 +1042,6 @@ ListView {
                             }
                         }
                     }
-
-                    Keys.onEscapePressed: root.hideNotificationCenter()
                 }
             }
         }
