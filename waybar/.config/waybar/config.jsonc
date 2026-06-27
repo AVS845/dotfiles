@@ -1,0 +1,61 @@
+{
+  "layer": "top",
+  "position": "top",
+  "height": 28,
+  "margin-top": 6,
+  "margin-left": 10,
+  "margin-right": 10,
+  "spacing": 8,
+
+  "modules-left": [
+    "hyprland/workspaces"
+  ],
+  //"modules-center": [
+    //"hyprland/window"
+  //],
+  "modules-right": [
+    //"pulseaudio",
+    "network",
+    "battery",
+    "clock"
+  ],
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "on-click": "hyprctl dispatch workspace {id}",
+    "format-icons": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": ""
+    },
+    "persistent-workspaces": {
+      "*": [1, 2, 3, 4, 5]
+    }
+  },
+  "hyprland/window": {
+    "format": "{title}",
+    "max-length": 60,
+    "empty-format": ""
+  },
+  "pulsaudio": {
+    "format": " ",
+    "format-muted": "",
+    "tooltip": false
+  },
+  "network": {
+    "format-wifi": " ",
+    "format-ethernet": "",
+    "format-disconnected": "",
+    "tooltip": false
+  },
+  "battery": {
+    "format": "{icon}    {capacity}%",
+    "format-icons": ["", "", "", "", ""],
+    "tooltip": false
+  },
+  "clock": {
+    "format": "{:%H:%M}",
+    "tooltip": false
+  }
+}

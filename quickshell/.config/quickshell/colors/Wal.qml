@@ -1,0 +1,1 @@
+/home/ansel/.cache/wal/Wal.qml
